@@ -1431,13 +1431,14 @@ async function _initFirebase() {
           invoices:invoices,appointments:appointments,counters:counters};
         _idbSave(_syncD);
       })();
-    } else if (!_fbAgentCount && agents.length > 0) {
-      // Firebase empty but local has data — push local to Firebase silently
+    } else if (_hasLocal && agents.length > _fbAgentCount) {
+      // Local has MORE data than Firebase — push local up so Firebase catches up
+      // This prevents on('value') from later overwriting with stale Firebase data
       if (_fbRef) {
         var _pushD = {settings:settings,properties:properties,agents:agents,
           contractors:contractors,defects:defects,inspections:inspections,
           invoices:invoices,appointments:appointments,counters:counters};
-        _fbRef.set(_pushD).catch(function(e){ console.warn('Auto-push to Firebase failed:', e.message); });
+        _fbRef.set(_pushD).catch(function(e){ console.warn('Sync to Firebase failed:', e.message); });
       }
     }
     if (!_fbReady) {
@@ -1464,7 +1465,24 @@ async function _initFirebase() {
     // Real-time listener — all devices update within ~1 second of any save
     _fbRef.on('value', function(s) {
       if (_skipNextSync) { _skipNextSync = false; return; }
-      _applySnapshot(s.val());
+      var _fv = s.val();
+      // Never let Firebase overwrite MORE data with LESS data (stale Firebase beats fresh local)
+      var _fac = 0;
+      if (_fv && _fv.agents) {
+        _fac = Array.isArray(_fv.agents) ? _fv.agents.length : Object.keys(_fv.agents).length;
+      }
+      if (_fac > 0 && _fac < agents.length) {
+        // Firebase is behind — push our data up instead and skip overwrite
+        if (_fbRef) {
+          var _pd = {settings:settings,properties:properties,agents:agents,
+            contractors:contractors,defects:defects,inspections:inspections,
+            invoices:invoices,appointments:appointments,counters:counters};
+          _skipNextSync = true;
+          _fbRef.set(_pd).catch(function(){});
+        }
+        return;
+      }
+      _applySnapshot(_fv);
       // Refresh role selector person lists if they're open
       var agBox = document.getElementById('agent-select-box');
       var coBox = document.getElementById('contractor-select-box');
