@@ -1289,14 +1289,15 @@ tr:hover td{background:#f8fafc;}
 // ⚙️  PASTE YOUR FIREBASE CONFIG HERE
 //     Firebase Console → Project Settings → Your apps → Web app → SDK setup
 var FIREBASE_CONFIG = {
-  apiKey:            "AIzaSyAKZuFseakq7kruYwg9QMC31mKxMAEqUAY",
-  authDomain:        "the-agency-principle.firebaseapp.com",
-  databaseURL:       "https://the-agency-principle-default-rtdb.asia-southeast1.firebasedatabase.app",
-  projectId:         "the-agency-principle",
-  storageBucket:     "the-agency-principle.firebasestorage.app",
-  messagingSenderId: "729730895288",
-  appId:             "1:729730895288:web:cf47797fc780e5316f134d"
+  apiKey:            "PASTE_API_KEY",
+  authDomain:        "PASTE_PROJECT_ID.firebaseapp.com",
+  databaseURL:       "https://PASTE_PROJECT_ID-default-rtdb.firebaseio.com",
+  projectId:         "PASTE_PROJECT_ID",
+  storageBucket:     "PASTE_PROJECT_ID.appspot.com",
+  messagingSenderId: "PASTE_SENDER_ID",
+  appId:             "PASTE_APP_ID"
 };
+
 var _fbDb  = null;
 var _fbRef = null;
 var _skipNextSync = false;
@@ -1333,10 +1334,22 @@ async function _initFirebase() {
     _fbRef = _fbDb.ref('pe_data');
     var snap = await _fbRef.get();
     _applySnapshot(snap.val());
+    // Skip first on('value') — it fires immediately with stale local cache and
+    // would overwrite the fresh data we just loaded via get().
+    _skipNextSync = true;
     // Real-time listener — all devices update within ~1 second of any save
     _fbRef.on('value', function(s) {
       if (_skipNextSync) { _skipNextSync = false; return; }
       _applySnapshot(s.val());
+      // Refresh role selector person lists if they're open
+      var agBox = document.getElementById('agent-select-box');
+      var coBox = document.getElementById('contractor-select-box');
+      if (agBox && agBox.style.display !== 'none') {
+        _renderPersonList('agent-person-list', agents, 'agent', '#1e3a8a');
+      }
+      if (coBox && coBox.style.display !== 'none') {
+        _renderPersonList('contractor-person-list', contractors, 'contractor', '#78350f');
+      }
       var active = document.querySelector('.page.active');
       if (active) showPage(active.id);
       showToast('🔄 Synced from another device');
