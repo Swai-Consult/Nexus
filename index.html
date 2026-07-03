@@ -1368,13 +1368,28 @@ async function _initFirebase() {
         ov.appendChild(btn);
       }
     }, 10000);
-    // ── STEP 1: Load from IndexedDB immediately so user never waits ──
+    // ── STEP 1: Load from IndexedDB (or localStorage fallback) immediately ──
     var _hasLocal = false;
     await new Promise(function(_idbResolve){
       _idbLoad(function(_preD, _preT){
         if (_preD && (_preD.agents || _preD.properties || _preD.contractors)) {
           _applySnapshot(_preD);
           _hasLocal = true;
+        }
+        // Fallback: if IndexedDB empty, try localStorage
+        if (!_hasLocal) {
+          try {
+            var _lsRaw = localStorage.getItem('pe_local_data');
+            if (_lsRaw) {
+              var _lsD = JSON.parse(_lsRaw);
+              if (_lsD && (_lsD.agents || _lsD.properties || _lsD.contractors)) {
+                _applySnapshot(_lsD);
+                _hasLocal = true;
+                // Migrate to IndexedDB so future reads are reliable
+                _idbSave(_lsD);
+              }
+            }
+          } catch(e) {}
         }
         _idbResolve();
       });
@@ -1524,6 +1539,9 @@ async function saveAll() {
   };
   // Save to IndexedDB immediately (no size limit — handles large photos)
   _idbSave(_data);
+  // Also mirror to localStorage as fallback (works if data < 10MB)
+  try { localStorage.setItem('pe_local_data', JSON.stringify(_data));
+        localStorage.setItem('pe_local_ts', new Date().toISOString()); } catch(e) {}
   try {
     await _fbRef.set(_data);
     var ind = document.getElementById('tb-save-indicator');
