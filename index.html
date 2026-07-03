@@ -1482,6 +1482,19 @@ async function _initFirebase() {
         }
         return;
       }
+      // Restore photos from current in-memory data (Firebase stores text only)
+      if (_fv) {
+        var _pm = {}, _cm = {};
+        (agents||[]).forEach(function(a){ if(a.id){ _pm[a.id]=a.photo||a.photoUrl||''; }});
+        (contractors||[]).forEach(function(c){ if(c.id){ _cm[c.id]=c.photo||c.photoUrl||''; }});
+        if (_fv.agents) _fv.agents = _fbArr(_fv.agents).map(function(a){
+          if(a.id && _pm[a.id]) a.photo = _pm[a.id]; return a;
+        });
+        if (_fv.contractors) _fv.contractors = _fbArr(_fv.contractors).map(function(c){
+          if(c.id && _cm[c.id]) c.photo = _cm[c.id]; return c;
+        });
+        if (_fv.settings && settings.logo) _fv.settings.logo = settings.logo;
+      }
       _applySnapshot(_fv);
       // Refresh role selector person lists if they're open
       var agBox = document.getElementById('agent-select-box');
@@ -1514,6 +1527,26 @@ async function _initFirebase() {
 }
 
 
+
+// Strip base64 photos before Firebase save (Firebase 10MB per-field limit)
+function _stripPhotos(d) {
+  var s = JSON.parse(JSON.stringify(d));
+  ['agents','contractors'].forEach(function(k){
+    if (s[k]) s[k] = s[k].map(function(r){
+      var c = Object.assign({}, r);
+      delete c.photo; delete c.photoUrl; delete c.photoData;
+      return c;
+    });
+  });
+  if (s.settings) {
+    s.settings = Object.assign({}, s.settings);
+    delete s.settings.logo; delete s.settings.logoUrl; delete s.settings.logoData;
+  }
+  if (s.properties) s.properties = s.properties.map(function(r){
+    var c = Object.assign({}, r); delete c.photo; delete c.photoUrl; return c;
+  });
+  return s;
+}
 // ── IndexedDB local cache (no size limit — works with large photos) ──────────
 function _idbSave(data) {
   try {
@@ -1555,13 +1588,14 @@ async function saveAll() {
     contractors: contractors, defects: defects, inspections: inspections,
     invoices: invoices, appointments: appointments, counters: counters
   };
-  // Save to IndexedDB immediately (no size limit — handles large photos)
+  // Save FULL data (with photos) to IndexedDB and localStorage
   _idbSave(_data);
-  // Also mirror to localStorage as fallback (works if data < 10MB)
   try { localStorage.setItem('pe_local_data', JSON.stringify(_data));
         localStorage.setItem('pe_local_ts', new Date().toISOString()); } catch(e) {}
+  // Save PHOTO-STRIPPED data to Firebase (Firebase 10MB/field limit rejects base64 photos)
+  var _fbData = _stripPhotos(_data);
   try {
-    await _fbRef.set(_data);
+    await _fbRef.set(_fbData);
     var ind = document.getElementById('tb-save-indicator');
     if (ind) { ind.style.display='block'; setTimeout(function(){ ind.style.display='none'; }, 1800); }
   } catch(e) {
