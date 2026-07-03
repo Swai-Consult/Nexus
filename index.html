@@ -4309,6 +4309,11 @@ document.addEventListener('DOMContentLoaded', function() {
 
   /* Contractor buttons */
   wire('tc-cancel-btn',   function(){ closeModal('task-complete-modal'); });
+  // Invoice modal buttons
+  wire('inv-add-line',    addInvLine);
+  wire('inv-cancel-btn',  function(){ closeModal('inv-create-modal'); });
+  wire('inv-save-btn',    function(){ saveInvoice(false); });
+  wire('inv-save-wa-btn', function(){ saveInvoice(true); });
   // Photo upload modal
   wire('pu-close-btn', function(){ closeModal('photo-upload-modal'); });
   var puInput = document.getElementById('pu-file-input');
