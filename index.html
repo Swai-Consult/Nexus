@@ -1368,47 +1368,74 @@ async function _initFirebase() {
         ov.appendChild(btn);
       }
     }, 10000);
-    // Race: Firebase get() vs 8-second timeout
+    // ── STEP 1: Load from localStorage immediately so user never waits ──
+    var _hasLocal = false;
+    try {
+      var _preRaw = localStorage.getItem('pe_local_data');
+      if (_preRaw) {
+        var _preD = JSON.parse(_preRaw);
+        if (_preD && (_preD.agents || _preD.properties || _preD.contractors)) {
+          _applySnapshot(_preD);
+          _hasLocal = true;
+        }
+      }
+    } catch(_preE) {}
+    // If we have local data, dismiss overlay NOW — Firebase loads in background
+    if (_hasLocal) {
+      _fbReady = true;
+      (function(){
+        var ov = document.getElementById('fb-loading-overlay');
+        var st = document.getElementById('fb-load-status');
+        if (st) st.textContent = 'Syncing with cloud…';
+        if (ov) { ov.style.opacity='0'; setTimeout(function(){ ov.style.display='none'; }, 300); }
+        if (window._fbLoadTimer) clearTimeout(window._fbLoadTimer);
+      })();
+    }
+    // ── STEP 2: Race Firebase vs 8s timeout (runs regardless, silently if local data exists) ──
     var snap = await Promise.race([
       _fbRef.get(),
       new Promise(function(_, reject){
         setTimeout(function(){ reject(new Error('Firebase timeout after 8s — check network or region')); }, 8000);
       })
     ]);
-    _applySnapshot(snap.val());
-    _fbReady = true;
-    // If Firebase returned empty, try restoring from localStorage backup
-    if (!agents.length && !contractors.length && !properties.length) {
-      try {
-        var _lb = localStorage.getItem('pe_local_data');
-        if (_lb) {
-          var _ld = JSON.parse(_lb);
-          var _lts = localStorage.getItem('pe_local_ts') || '';
-          if (_ld.agents && _ld.agents.length && confirm(
-            'Cloud data appears empty.\nLocal backup found (' + _lts.slice(0,10) + ').\nRestore it now?'
-          )) {
-            var _la = settings.adminUser ? JSON.parse(JSON.stringify(settings.adminUser)) : null;
-            if (_ld.settings)    settings     = _ld.settings;
-            if (_la && _la.passwordHash) settings.adminUser = _la;
-            if (_ld.properties)  properties   = _ld.properties;
-            if (_ld.agents)      agents       = _ld.agents;
-            if (_ld.contractors) contractors  = _ld.contractors;
-            if (_ld.defects)     defects      = _ld.defects;
-            if (_ld.inspections) inspections  = _ld.inspections;
-            if (_ld.invoices)    invoices     = _ld.invoices;
-            if (_ld.appointments)appointments = _ld.appointments;
-            if (_ld.counters)    counters     = _ld.counters;
-            saveAll();
-          }
-        }
-      } catch(e) {}
+    var _fbVal = snap.val();
+    // Merge: use Firebase data if it has MORE agents than local (another device added data)
+    // Otherwise keep local (local is always at least as fresh as Firebase)
+    var _fbAgentCount = 0;
+    if (_fbVal && _fbVal.agents) {
+      _fbAgentCount = Array.isArray(_fbVal.agents) ? _fbVal.agents.length : Object.keys(_fbVal.agents).length;
     }
-    // Dismiss loading overlay — data is ready, UI can be used
-    (function(){
-      var ov = document.getElementById('fb-loading-overlay');
-      if (ov) { ov.style.opacity = '0'; setTimeout(function(){ ov.style.display='none'; }, 400); }
-      if (window._fbLoadTimer) clearTimeout(window._fbLoadTimer);
-    })();
+    if (!_hasLocal || _fbAgentCount > agents.length) {
+      // Firebase has more data — use it and update localStorage
+      var _savedAdm = settings.adminUser ? JSON.parse(JSON.stringify(settings.adminUser)) : null;
+      _applySnapshot(_fbVal);
+      if (_savedAdm && _savedAdm.passwordHash) settings.adminUser = _savedAdm;
+      // Save to localStorage so next load is instant
+      try {
+        var _syncD = {settings:settings,properties:properties,agents:agents,
+          contractors:contractors,defects:defects,inspections:inspections,
+          invoices:invoices,appointments:appointments,counters:counters};
+        localStorage.setItem('pe_local_data', JSON.stringify(_syncD));
+        localStorage.setItem('pe_local_ts', new Date().toISOString());
+      } catch(e) {}
+    } else if (!_fbAgentCount && agents.length > 0) {
+      // Firebase empty but local has data — push local to Firebase silently
+      if (_fbRef) {
+        var _pushD = {settings:settings,properties:properties,agents:agents,
+          contractors:contractors,defects:defects,inspections:inspections,
+          invoices:invoices,appointments:appointments,counters:counters};
+        _fbRef.set(_pushD).catch(function(){});
+      }
+    }
+    if (!_fbReady) {
+      _fbReady = true;
+      // Dismiss loading overlay (only reached if no local data)
+      (function(){
+        var ov = document.getElementById('fb-loading-overlay');
+        if (ov) { ov.style.opacity = '0'; setTimeout(function(){ ov.style.display='none'; }, 400); }
+        if (window._fbLoadTimer) clearTimeout(window._fbLoadTimer);
+      })();
+    }
     // Refresh role-selector person lists in case user clicked before data arrived
     (function(){
       var agBox = document.getElementById('agent-select-box');
