@@ -1345,6 +1345,24 @@ async function _initFirebase() {
     if (!firebase.apps.length) firebase.initializeApp(FIREBASE_CONFIG);
     _fbDb  = firebase.database();
     _fbRef = _fbDb.ref('pe_data');
+    // Safety timeout — show retry button after 10s if still loading
+    window._fbLoadTimer = setTimeout(function() {
+      if (_fbReady) return;
+      var st = document.getElementById('fb-load-status');
+      if (st) {
+        st.style.color = '#fbbf24';
+        st.innerHTML = '⚠️ Taking longer than usual…';
+      }
+      var ov = document.getElementById('fb-loading-overlay');
+      if (ov && !document.getElementById('fb-retry-btn')) {
+        var btn = document.createElement('button');
+        btn.id = 'fb-retry-btn';
+        btn.textContent = '🔄 Reload App';
+        btn.style.cssText = 'margin-top:20px;padding:12px 28px;background:#7c3aed;color:#fff;border:none;border-radius:12px;font-size:14px;font-weight:700;cursor:pointer;';
+        btn.onclick = function(){ window.location.reload(true); };
+        ov.appendChild(btn);
+      }
+    }, 10000);
     var snap = await _fbRef.get();
     _applySnapshot(snap.val());
     _fbReady = true;
@@ -1352,6 +1370,7 @@ async function _initFirebase() {
     (function(){
       var ov = document.getElementById('fb-loading-overlay');
       if (ov) { ov.style.opacity = '0'; setTimeout(function(){ ov.style.display='none'; }, 400); }
+      if (window._fbLoadTimer) clearTimeout(window._fbLoadTimer);
     })();
     // Refresh role-selector person lists in case user clicked before data arrived
     (function(){
