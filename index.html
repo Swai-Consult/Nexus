@@ -1368,7 +1368,13 @@ async function _initFirebase() {
         ov.appendChild(btn);
       }
     }, 10000);
-    var snap = await _fbRef.get();
+    // Race: Firebase get() vs 8-second timeout
+    var snap = await Promise.race([
+      _fbRef.get(),
+      new Promise(function(_, reject){
+        setTimeout(function(){ reject(new Error('Firebase timeout after 8s — check network or region')); }, 8000);
+      })
+    ]);
     _applySnapshot(snap.val());
     _fbReady = true;
     // Dismiss loading overlay — data is ready, UI can be used
@@ -1643,30 +1649,44 @@ function chooseRole(role) {
   document.getElementById('agent-select-box').style.display      = 'none';
   document.getElementById('contractor-select-box').style.display = 'none';
   _selectedAgentId = ''; _selectedContractorId = '';
+
   if (role === 'agent') {
     var btn=document.getElementById('btn-enter-agent');
     if(btn){btn.disabled=true;btn.style.opacity='.5';btn.style.pointerEvents='none';}
     document.getElementById('agent-select-box').style.display = 'block';
-    if (_fbReady) {
-      _renderPersonList('agent-person-list', agents, 'agent', '#1e3a8a');
+    var agList = document.getElementById('agent-person-list');
+    agList.innerHTML = '<div style="color:#94a3b8;font-size:13px;text-align:center;padding:16px;">⏳ Loading…</div>';
+    // Always fetch fresh from Firebase — never trust stale in-memory cache
+    if (_fbRef) {
+      _fbRef.child('agents').get().then(function(snap) {
+        var fresh = _fbArr(snap.val());
+        agents = fresh; // keep local cache in sync
+        _renderPersonList('agent-person-list', fresh, 'agent', '#1e3a8a');
+      }).catch(function(){ _renderPersonList('agent-person-list', agents, 'agent', '#1e3a8a'); });
     } else {
-      document.getElementById('agent-person-list').innerHTML =
-        '<div style="color:#94a3b8;font-size:13px;text-align:center;padding:16px;">⏳ Connecting… please wait</div>';
+      _renderPersonList('agent-person-list', agents, 'agent', '#1e3a8a');
     }
     return;
   }
+
   if (role === 'contractor') {
     var btn2=document.getElementById('btn-enter-contractor');
     if(btn2){btn2.disabled=true;btn2.style.opacity='.5';btn2.style.pointerEvents='none';}
     document.getElementById('contractor-select-box').style.display = 'block';
-    if (_fbReady) {
-      _renderPersonList('contractor-person-list', contractors, 'contractor', '#78350f');
+    var coList = document.getElementById('contractor-person-list');
+    coList.innerHTML = '<div style="color:#94a3b8;font-size:13px;text-align:center;padding:16px;">⏳ Loading…</div>';
+    if (_fbRef) {
+      _fbRef.child('contractors').get().then(function(snap) {
+        var fresh = _fbArr(snap.val());
+        contractors = fresh;
+        _renderPersonList('contractor-person-list', fresh, 'contractor', '#78350f');
+      }).catch(function(){ _renderPersonList('contractor-person-list', contractors, 'contractor', '#78350f'); });
     } else {
-      document.getElementById('contractor-person-list').innerHTML =
-        '<div style="color:#94a3b8;font-size:13px;text-align:center;padding:16px;">⏳ Connecting… please wait</div>';
+      _renderPersonList('contractor-person-list', contractors, 'contractor', '#78350f');
     }
     return;
   }
+
   openAdminLogin();
 }
 
