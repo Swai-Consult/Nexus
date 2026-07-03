@@ -1492,6 +1492,21 @@ async function _initFirebase() {
           if(c.id && _cm[c.id]) c.photo = _cm[c.id]; return c;
         });
         if (_fv.settings && settings.logo) _fv.settings.logo = settings.logo;
+        // Merge defects: never let Firebase roll back a more-advanced local status
+        var _sOrd = {open:0,assigned:1,'in-progress':2,'repair-complete':3,'invoice-submitted':4,done:5};
+        if (_fv.defects && defects.length) {
+          var _ldMap = {};
+          defects.forEach(function(d){ _ldMap[d.id] = d; });
+          _fv.defects = _fbArr(_fv.defects).map(function(fd){
+            var ld = _ldMap[fd.id];
+            if (ld && (_sOrd[ld.status]||0) > (_sOrd[fd.status]||0)) {
+              fd.status = ld.status;
+              fd.acknowledgedBy = ld.acknowledgedBy || fd.acknowledgedBy;
+              fd.completedNotes = ld.completedNotes || fd.completedNotes;
+            }
+            return fd;
+          });
+        }
       }
       _applySnapshot(_fv);
       // Refresh role selector person lists if they're open
