@@ -735,7 +735,7 @@ tr:hover td{background:#f8fafc;}
         <div class="page-actions">
           <div class="page-filters">
             <select id="adef-filter-prop"><option value="">All properties</option></select>
-            <select id="adef-filter-status"><option value="">All statuses</option><option value="open">Open</option><option value="in-progress">In Progress</option><option value="done">Done</option></select>
+            <select id="adef-filter-status"><option value="">All statuses</option><option value="open">Open</option><option value="assigned">Assigned</option><option value="in-progress">In Progress</option><option value="repair-complete">Repair Complete</option><option value="invoice-submitted">Invoice Submitted</option><option value="payment-approved">Payment Approved</option><option value="done">Done</option></select>
           </div>
           <button class="btn btn-primary" id="btn-new-defect">🔧 New Maintenance Request</button>
         </div>
@@ -3006,9 +3006,10 @@ function renderAgentDefects() {
       '<td><span class="badge '+statusCls+'">'+(d.status||'open')+'</span></td>'+
       '<td style="text-align:center;">'+photoCell+'</td>'+
       '<td><div style="display:flex;gap:4px;flex-wrap:wrap;">'+
-        '<button class="btn btn-ghost btn-xs" onclick="openEditDefectModal(\''+d.id+'\')" title="Edit">✏️</button>'+
-        '<button class="btn btn-wa btn-xs" onclick="sendDefectWA(\''+d.id+'\')" title="WhatsApp Admin">WA</button>'+
-        (d.contractorId?'<button class="btn btn-ghost btn-xs" onclick="agentAddExtraCt(\''+d.id+'\')" title="Add another contractor">+👤</button>':'')+
+        '<button class="btn btn-primary btn-xs" onclick="openDefectDetail(\''+d.id+'\')" title="View details">👁 View</button>'+
+        ((['open','assigned','in-progress'].indexOf(d.status)!==-1)?'<button class="btn btn-ghost btn-xs" onclick="openEditDefectModal(\''+d.id+'\')" title="Edit">✏️</button>':'')+
+        '<button class="btn btn-wa btn-xs" onclick="sendDefectWA(\''+d.id+'\')" title="WhatsApp">WA</button>'+
+        (d.contractorId&&['open','assigned','in-progress'].indexOf(d.status)!==-1?'<button class="btn btn-ghost btn-xs" onclick="agentAddExtraCt(\''+d.id+'\')" title="Add another contractor">+👤</button>':'')+
         '<button class="btn btn-danger btn-xs" onclick="deleteDefect(\''+d.id+'\');renderAgentDefects()">Del</button>'+
       '</div></td></tr>';
   }).join('');
@@ -3407,7 +3408,12 @@ function renderContTasks() {
     var inv=invoices.find(function(i){return i.defectId===d.id;});
     var hasInvoice=!!(inv||d.uploadedInvoice);
     var pGate=prop&&prop.gate?prop.gate:'';
-    return '<div class="task-card '+(d.urgency||'routine')+'">'+
+    // Card accent color by workflow stage
+    var cardAccent='';
+    if(d.status==='repair-complete'){cardAccent='border-left:4px solid #22c55e;';}
+    else if(d.status==='invoice-submitted'||d.status==='payment-approved'){cardAccent='border-left:4px solid #f59e0b;';}
+    else if(d.status==='done'){cardAccent='border-left:4px solid #94a3b8;';}
+    return '<div class="task-card '+(d.urgency||'routine')+'" style="'+cardAccent+'">'+ 
       '<div class="task-card-header">'+
         '<div style="flex:1;">'+
           '<div style="font-size:10px;color:var(--muted);font-weight:700;letter-spacing:.04em;">'+(d.ref||d.id.slice(-6))+'</div>'+
@@ -3416,6 +3422,9 @@ function renderContTasks() {
         '<div style="display:flex;flex-direction:column;align-items:flex-end;gap:4px;">'+
           '<span class="badge badge-'+(d.urgency||'routine')+'">'+(d.urgency||'routine')+'</span>'+
           '<span class="badge '+statusCls+'">'+(d.status||'open')+'</span>'+
+        (d.status==='payment-approved'?'<span style="font-size:10px;color:#92400e;background:#fef3c7;padding:2px 7px;border-radius:4px;margin-left:6px;">💛 Awaiting Your Payment Confirmation</span>':'')+
+        (d.status==='repair-complete'?'<span style="font-size:10px;color:#166534;background:#dcfce7;padding:2px 7px;border-radius:4px;margin-left:6px;">✅ Repair Complete</span>':'')+
+        (d.status==='done'?'<span style="font-size:10px;color:#374151;background:#f3f4f6;padding:2px 7px;border-radius:4px;margin-left:6px;">🏁 Closed</span>':'')+
         '</div>'+
       '</div>'+
       '<div class="task-card-meta">'+
@@ -3429,16 +3438,19 @@ function renderContTasks() {
       (function(){ var ack=(d.acknowledgedBy||{})[currentUserId]; return ack?'<div style="font-size:11px;color:#065f46;background:#d1fae5;padding:4px 10px;border-radius:6px;margin-bottom:8px;display:inline-block;">✅ Acknowledged at '+ack.slice(0,16).replace('T',' ')+'</div>':''; })()+
       (photos.length?'<div class="photo-grid">'+photos.slice(0,4).map(function(p){return '<img src="'+p+'" class="photo-thumb" onclick="viewPhotoSrc(this.src)">';}).join('')+(photos.length>4?'<div style="width:76px;height:76px;background:var(--bg);border-radius:8px;display:flex;align-items:center;justify-content:center;font-size:13px;font-weight:700;color:var(--muted);cursor:pointer;" onclick="openPhotoUpload(\''+d.id+'\')">+'+(photos.length-4)+'</div>':'')+'</div>':'')+
       (d.uploadedInvoice?'<div style="font-size:12px;background:#ede9fe;color:#6d28d9;padding:6px 10px;border-radius:6px;margin-bottom:6px;">📄 Invoice: '+(d.uploadedInvoiceName||'Invoice file')+'</div>':'')+
-      (d.completedNotes&&d.status!=='open'?'<div style="font-size:12px;color:var(--success);margin-bottom:6px;">✅ '+d.completedNotes+'</div>':'')+
+      (d.completedNotes?'<div style="font-size:12px;color:var(--success);margin-bottom:6px;">✅ Work done: '+d.completedNotes+'</div>':'')+
       '<div class="task-card-actions">'+
-        (!(d.acknowledgedBy||{})[currentUserId]&&d.status==='assigned'?'<button class="btn btn-primary btn-sm" style="background:#0d9488;" onclick="acknowledgeTask(\''+d.id+'\')">👀 Acknowledge</button>':'')+
-        (!isDone&&d.status!=='in-progress'&&d.status!=='repair-complete'?'<button class="btn btn-outline btn-sm" onclick="markTaskStarted(\''+d.id+'\')">▶ Start</button>':'')+
-        (!isDone&&d.status!=='repair-complete'&&d.status!=='invoice-submitted'?'<button class="btn btn-success btn-sm" onclick="openTaskComplete(\''+d.id+'\')">✅ Complete</button>':'')+
-        '<button class="btn btn-ghost btn-sm" onclick="openPhotoUpload(\''+d.id+'\')">📷 Photos'+(photos.length?' ('+photos.length+')':'')+'</button>'+
-        (!hasInvoice&&!isDone?'<button class="btn btn-outline btn-sm" onclick="openCreateInvoice(\''+d.id+'\')">🧾 Invoice</button>':'')+
-        (!isDone?'<button class="btn btn-outline btn-sm" onclick="openUploadInvoice(\''+d.id+'\')">📄 Upload Invoice</button>':'')+
-        (hasInvoice&&d.status==='repair-complete'?'<button class="btn btn-primary btn-sm" onclick="submitJobToAdmin(\''+d.id+'\')">📤 Submit to Admin</button>':'')+
-        (pGate?'<button class="btn btn-ghost btn-sm" onclick="showToast(\'Gate: '+pGate+'\')">🔑 Gate</button>':'')+
+        (!(d.acknowledgedBy||{})[currentUserId]&&d.status==='assigned'?'<button class="btn btn-primary btn-sm" style="background:#0d9488;" onclick="acknowledgeTask(\''+d.id+'\')" >👀 Acknowledge</button>':'')+
+        (d.status==='assigned'||d.status==='in-progress'?'':'') +
+        (d.status!=='repair-complete'&&d.status!=='invoice-submitted'&&d.status!=='payment-approved'&&!isDone?'<button class="btn btn-outline btn-sm" onclick="markTaskStarted(\''+d.id+'\')" style="'+(d.status==='in-progress'?'display:none':'')+'">▶ Start</button>':'')+
+        (d.status!=='repair-complete'&&d.status!=='invoice-submitted'&&d.status!=='payment-approved'&&!isDone?'<button class="btn btn-success btn-sm" onclick="openTaskComplete(\''+d.id+'\')" >✅ Complete</button>':'')+
+        '<button class="btn btn-ghost btn-sm" onclick="openPhotoUpload(\''+d.id+'\')" >📷 Photos'+(photos.length?' ('+photos.length+')':'')+'</button>'+
+        (d.status==='repair-complete'&&!hasInvoice?'<button class="btn btn-outline btn-sm" onclick="openCreateInvoice(\''+d.id+'\')" >🧾 Invoice</button>':'')+
+        (d.status==='repair-complete'?'<button class="btn btn-outline btn-sm" onclick="openUploadInvoice(\''+d.id+'\')" >📄 Upload Invoice</button>':'')+
+        (hasInvoice&&d.status==='repair-complete'?'<button class="btn btn-primary btn-sm" onclick="submitJobToAdmin(\''+d.id+'\')" >📤 Submit to Admin</button>':'')+
+        (d.status==='payment-approved'?'<button class="btn btn-success btn-sm" style="background:#16a34a;" onclick="markPaymentReceived(\''+d.id+'\')" >💰 Payment Received</button>':'')+
+        (isDone?'<button class="btn btn-ghost btn-sm" onclick="openDefectDetail(\''+d.id+'\')" >📋 View Summary</button>':'')+
+        (pGate?'<button class="btn btn-ghost btn-sm" onclick="showToast(\'Gate: '+pGate+'\')" >🔑 Gate</button>':'')+
       '</div>'+
     '</div>';
   }).join('');
@@ -3448,6 +3460,32 @@ function submitJobToAdmin(defectId) {
   var d=defects.find(function(x){return x.id===defectId;});if(!d)return;
   d.status='invoice-submitted';d.invoiceSubmittedAt=new Date().toISOString();
   saveAll();renderContTasks();showToast('📤 Submitted to Admin for payment approval!');
+}
+
+function markPaymentReceived(defectId) {
+  var d=defects.find(function(x){return x.id===defectId;});if(!d)return;
+  if(!confirm('Confirm you have received payment for:\n"'+d.item+'"\n\nThis will close the task as DONE.'))return;
+  d.status='done';
+  d.paymentReceivedAt=new Date().toISOString();
+  d.paymentReceivedBy=currentUserId;
+  // Mark linked invoice as paid
+  var inv=invoices.find(function(i){return i.defectId===defectId;});
+  if(inv)inv.status='paid';
+  saveAll();
+  renderContTasks();
+  renderContDash();
+  showToast('✅ Payment confirmed — task marked DONE!');
+  // Notify agent and admin via WA
+  var ct=contractors.find(function(c){return c.id===currentUserId;});
+  var prop=properties.find(function(p){return p.id===d.propertyId;});
+  var msg='✅ *PAYMENT RECEIVED*\n'+(d.ref||defectId.slice(-6))+': '+d.item+'\n'+(prop?prop.complex+' - '+prop.unit:'')+'\nContractor: '+(ct?ct.name:'')+'\nTask is now *DONE*.';
+  // Notify admin
+  var adminPh=settings.adminUser&&settings.adminUser.phone?_normPhone(settings.adminUser.phone):'';
+  if(adminPh)window.open('https://wa.me/'+adminPh+'?text='+encodeURIComponent(msg),'_blank');
+  // Notify the agent for this property
+  var agentPh='';
+  if(prop&&prop.agentId){var ag=agents.find(function(a){return a.id===prop.agentId;});if(ag)agentPh=_normPhone(ag.wa||ag.phone||'');}
+  if(agentPh&&agentPh!==adminPh)setTimeout(function(){window.open('https://wa.me/'+agentPh+'?text='+encodeURIComponent(msg),'_blank');},400);
 }
 
 
@@ -4228,7 +4266,7 @@ function openDefectDetail(defectId) {
       '<strong>In-App Invoice: </strong>'+inv.ref+' — R '+fmt(inv.total)+
       ' <span class="badge '+(inv.status==='paid'?'badge-paid':'badge-pending')+'">'+(inv.status||'pending')+'</span></div>' : '')+
     // Approve button
-    (canApprove && d.status !== 'payment-approved' ?
+    (canApprove && d.status !== 'payment-approved' && currentRole==='admin' ?
       '<button class="btn btn-primary" onclick="approvePayment(\''+d.id+'\');closeModal(\'defect-detail-modal\')">✅ Approve Payment</button>' : '')+
     (d.paymentApprovedAt ?
       '<div style="margin-top:10px;font-size:12px;color:var(--success);">✅ Payment approved '+d.paymentApprovedAt.slice(0,10)+(d.paymentApprovedBy?' by @'+d.paymentApprovedBy:'')+'</div>' : '');
