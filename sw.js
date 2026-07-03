@@ -3,7 +3,7 @@
    Firebase handles real-time data — internet required for live data.
 */
 
-const CACHE = 'proestate-v14';
+const CACHE = 'proestate-v15';
 const SHELL = ['/', '/index.html', '/manifest.json',
                '/icons/icon-192.png', '/icons/icon-512.png'];
 

@@ -345,7 +345,7 @@ tr:hover td{background:#f8fafc;}
   position:fixed;inset:0;z-index:9999;
   background:linear-gradient(135deg,#0f0a1e 0%,#1e1b4b 60%,#0f172a 100%);
   display:flex;flex-direction:column;align-items:center;justify-content:center;
-  transition:opacity .4s ease;">
+  transition:opacity .4s ease;pointer-events:auto;">
   <div style="font-size:56px;margin-bottom:16px;">🏢</div>
   <div style="font-size:22px;font-weight:800;color:#fff;letter-spacing:-.5px;margin-bottom:6px;" id="fb-load-name">ProEstate Manager</div>
   <div style="font-size:13px;color:#94a3b8;margin-bottom:32px;" id="fb-load-status">Connecting to database…</div>
@@ -1401,7 +1401,7 @@ async function _initFirebase() {
         var ov = document.getElementById('fb-loading-overlay');
         var st = document.getElementById('fb-load-status');
         if (st) st.textContent = 'Syncing with cloud…';
-        if (ov) { ov.style.opacity='0'; setTimeout(function(){ ov.style.display='none'; }, 300); }
+        if (ov) { ov.style.opacity='0'; ov.style.pointerEvents='none'; setTimeout(function(){ ov.style.display='none'; }, 300); }
         if (window._fbLoadTimer) clearTimeout(window._fbLoadTimer);
       })();
     }
@@ -1445,7 +1445,7 @@ async function _initFirebase() {
       // Dismiss loading overlay (only reached if no local data)
       (function(){
         var ov = document.getElementById('fb-loading-overlay');
-        if (ov) { ov.style.opacity = '0'; setTimeout(function(){ ov.style.display='none'; }, 400); }
+        if (ov) { ov.style.opacity = '0'; ov.style.pointerEvents = 'none'; setTimeout(function(){ ov.style.display='none'; }, 400); }
         if (window._fbLoadTimer) clearTimeout(window._fbLoadTimer);
       })();
     }
@@ -2491,7 +2491,7 @@ function assignContractor() {
   var prop = properties.find(function(p){ return p.id===d.propertyId; });
   if (ct && ct.phone && confirm('Assigned! Send WhatsApp notification to ' + ct.name + '?')) {
     var msg = buildDefectWA(d, prop, ct);
-    window.open('https://wa.me/' + ct.phone.replace(/\D/g,'') + '?text=' + encodeURIComponent(msg), '_blank');
+    window.open('https://wa.me/' + _normPhone(ct.phone||'') + '?text=' + encodeURIComponent(msg), '_blank');
   }
   renderDefectLog();
   showToast('✅ Contractor assigned!');
@@ -2717,7 +2717,7 @@ function clearAllData() {
 }
 
 function waContact(phone, msg) {
-  window.open('https://wa.me/' + phone.replace(/\D/g,'') + '?text=' + encodeURIComponent(msg), '_blank');
+  window.open('https://wa.me/' + _normPhone(phone||'') + '?text=' + encodeURIComponent(msg), '_blank');
 }
 
 /* ===================================================
@@ -2931,7 +2931,7 @@ function submitInspection() {
         'Issues Found: '+issues.length+'\n---------------------\n'+
         issues.map(function(d){return '- '+d.label+' ('+d.trade+')';}).join('\n')+
         '\n\nPlease review and assign contractors.\n- ProEstate';
-      window.open('https://wa.me/'+settings.phone.replace(/\D/g,'')+'?text='+encodeURIComponent(msg),'_blank');
+      window.open('https://wa.me/'+_normPhone(settings.phone||'')+'?text='+encodeURIComponent(msg),'_blank');
     }
   }
 }
@@ -3219,7 +3219,7 @@ function sendDefectWA(defectId) {
     (d.notes?'Notes: '+d.notes+'\n\n':'\n')+
     'Ref: '+(d.ref||d.id.slice(-6))+'\n'+
     'Please confirm receipt & ETA.\n- '+(settings.name||'Property Manager')+'\nTel: '+(settings.phone||'');
-  var ph=settings.phone?settings.phone.replace(/\D/g,''):'';
+  var ph=settings.phone?_normPhone(settings.phone||''):'';
   window.open('https://wa.me/'+ph+'?text='+encodeURIComponent(msg),'_blank');
 }
 
@@ -3430,7 +3430,7 @@ function renderContTasks() {
       (d.uploadedInvoice?'<div style="font-size:12px;background:#ede9fe;color:#6d28d9;padding:6px 10px;border-radius:6px;margin-bottom:6px;">📄 Invoice: '+(d.uploadedInvoiceName||'Invoice file')+'</div>':'')+
       (d.completedNotes&&d.status!=='open'?'<div style="font-size:12px;color:var(--success);margin-bottom:6px;">✅ '+d.completedNotes+'</div>':'')+
       '<div class="task-card-actions">'+
-        (!(d.acknowledgedBy||{})[currentUserId]&&d.status==='assigned'?'<button class="btn btn-primary btn-sm" style="background:#0d9488;" onclick="acknowledgeTask(\'"+d.id+"\')">👀 Acknowledge</button>':'')+
+        (!(d.acknowledgedBy||{})[currentUserId]&&d.status==='assigned'?'<button class="btn btn-primary btn-sm" style="background:#0d9488;" onclick="acknowledgeTask(\''+d.id+'\')">👀 Acknowledge</button>':'')+
         (!isDone&&d.status!=='in-progress'&&d.status!=='repair-complete'?'<button class="btn btn-outline btn-sm" onclick="markTaskStarted(\''+d.id+'\')">▶ Start</button>':'')+
         (!isDone&&d.status!=='repair-complete'&&d.status!=='invoice-submitted'?'<button class="btn btn-success btn-sm" onclick="openTaskComplete(\''+d.id+'\')">✅ Complete</button>':'')+
         '<button class="btn btn-ghost btn-sm" onclick="openPhotoUpload(\''+d.id+'\')">📷 Photos'+(photos.length?' ('+photos.length+')':'')+'</button>'+
@@ -3588,7 +3588,7 @@ function sendInvoiceWA(invId) {
     '-------------------\n'+
     (inv.notes?inv.notes+'\n':'')+
     '\nPlease confirm receipt.\n- '+(ct?ct.name:'Contractor');
-  var ph=settings.phone?settings.phone.replace(/\D/g,''):'';
+  var ph=settings.phone?_normPhone(settings.phone||''):'';
   window.open('https://wa.me/'+ph+'?text='+encodeURIComponent(msg),'_blank');
 }
 
