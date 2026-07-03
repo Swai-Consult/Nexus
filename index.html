@@ -775,6 +775,12 @@ tr:hover td{background:#f8fafc;}
 <!-- ======= CONTRACTOR DASHBOARD ======= -->
       <div class="page" id="pg-cont-dash">
         <div class="stats-grid" id="cont-dash-stats"></div>
+        <div id="cont-dash-payment-panel" style="display:none;margin-bottom:16px;">
+          <div class="card" style="border:2px solid #f59e0b;background:#fffbeb;">
+            <div class="card-title" style="color:#92400e;">💰 Awaiting Payment Confirmation</div>
+            <div id="cont-dash-payment-tasks"></div>
+          </div>
+        </div>
         <div class="grid-2">
           <div class="card"><div class="card-title">⚡ Urgent Tasks</div><div id="cont-dash-tasks"></div></div>
           <div class="card"><div class="card-title">🧾 Recent Invoices</div><div id="cont-dash-invs"></div></div>
@@ -3358,25 +3364,48 @@ function getMyTasks() {
 
 function renderContDash() {
   var mt=getMyTasks();
-  var FINAL=['payment-approved','done'];
-  var open=mt.filter(function(d){return FINAL.indexOf(d.status)===-1;}).length;
-  var done=mt.filter(function(d){return FINAL.indexOf(d.status)!==-1;}).length;
-  var crit=mt.filter(function(d){return d.urgency==='critical'&&FINAL.indexOf(d.status)===-1;}).length;
+  var awaitingPayment=mt.filter(function(d){return d.status==='payment-approved';});
+  var open=mt.filter(function(d){return ['payment-approved','done'].indexOf(d.status)===-1;}).length;
+  var done=mt.filter(function(d){return d.status==='done';}).length;
+  var crit=mt.filter(function(d){return d.urgency==='critical'&&['payment-approved','done'].indexOf(d.status)===-1;}).length;
   var myInvs=invoices.filter(function(i){return i.contractorId===currentUserId;});
   var pending=myInvs.filter(function(i){return i.status!=='paid';}).length;
+
+  // Stats
   var el=document.getElementById('cont-dash-stats');
   if(el) el.innerHTML=
     '<div class="stat-card"><div class="stat-label">Open Tasks</div><div class="stat-value" style="color:'+(open?'var(--danger)':'var(--success)')+'">'+open+'</div><div class="stat-sub">'+crit+' critical</div></div>'+
+    '<div class="stat-card" style="'+(awaitingPayment.length?'border:2px solid #f59e0b;background:#fffbeb;':'')+'"><div class="stat-label">Awaiting Payment</div><div class="stat-value" style="color:'+(awaitingPayment.length?'#92400e':'var(--muted)')+'">'+awaitingPayment.length+'</div><div class="stat-sub">'+(awaitingPayment.length?'Action needed':'')+'</div></div>'+
     '<div class="stat-card"><div class="stat-label">Completed</div><div class="stat-value" style="color:var(--success)">'+done+'</div></div>'+
     '<div class="stat-card"><div class="stat-label">Invoices Pending</div><div class="stat-value" style="color:var(--warning)">'+pending+'</div></div>';
+
+  // Awaiting Payment panel — shown prominently when admin has approved payment
+  var pp=document.getElementById('cont-dash-payment-panel');
+  var pt=document.getElementById('cont-dash-payment-tasks');
+  if(pp) pp.style.display=awaitingPayment.length?'block':'none';
+  if(pt) pt.innerHTML=awaitingPayment.map(function(d){
+    var prop=properties.find(function(p){return p.id===d.propertyId;});
+    return '<div style="display:flex;justify-content:space-between;align-items:center;padding:12px 0;border-bottom:1px solid #fde68a;">'+
+      '<div>'+
+        '<div style="font-weight:700;font-size:13px;">'+d.item+'</div>'+
+        '<div style="font-size:11px;color:#92400e;">'+(prop?prop.complex+' - '+prop.unit:'')+'</div>'+
+        '<div style="font-size:11px;color:#78350f;margin-top:2px;">✅ Admin has approved payment — confirm when you receive it</div>'+
+      '</div>'+
+      '<button class="btn btn-success btn-sm" style="background:#16a34a;white-space:nowrap;flex-shrink:0;" onclick="markPaymentReceived(\''+d.id+'\')">💰 Payment Received</button>'+
+    '</div>';
+  }).join('');
+
+  // Urgent open tasks
   var te=document.getElementById('cont-dash-tasks');
-  var urgent=mt.filter(function(d){return FINAL.indexOf(d.status)===-1;}).sort(function(a,b){return a.urgency==='critical'?-1:1;}).slice(0,5);
+  var urgent=mt.filter(function(d){return ['payment-approved','done'].indexOf(d.status)===-1;}).sort(function(a,b){return a.urgency==='critical'?-1:1;}).slice(0,5);
   if(te) te.innerHTML=urgent.length?urgent.map(function(d){
     return '<div style="display:flex;justify-content:space-between;align-items:center;padding:8px 0;border-bottom:1px solid var(--border);">'+
       '<div><div style="font-weight:700;font-size:13px;">'+d.item+'</div>'+
       '<div style="font-size:11px;color:var(--muted);">'+getPropName(d.propertyId)+' &middot; '+(d.adminNotes||'No instructions')+'</div></div>'+
       '<span class="badge badge-'+(d.urgency||'routine')+'">'+(d.urgency||'routine')+'</span></div>';
-  }).join(''):'<div style="padding:16px;text-align:center;color:var(--success);">All clear!</div>';
+  }).join(''):'<div style="padding:16px;text-align:center;color:var(--success);">✅ All tasks up to date!</div>';
+
+  // Recent invoices
   var ie=document.getElementById('cont-dash-invs');
   if(ie) ie.innerHTML=myInvs.slice(0,5).map(function(inv){
     return '<div style="display:flex;justify-content:space-between;padding:8px 0;border-bottom:1px solid var(--border);">'+
