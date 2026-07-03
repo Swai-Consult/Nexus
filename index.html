@@ -1435,10 +1435,9 @@ async function _initFirebase() {
       // Local has MORE data than Firebase — push local up so Firebase catches up
       // This prevents on('value') from later overwriting with stale Firebase data
       if (_fbRef) {
-        var _pushD = {settings:settings,properties:properties,agents:agents,
+        _fbRef.set(_stripPhotos({settings:settings,properties:properties,agents:agents,
           contractors:contractors,defects:defects,inspections:inspections,
-          invoices:invoices,appointments:appointments,counters:counters};
-        _fbRef.set(_pushD).catch(function(e){ console.warn('Sync to Firebase failed:', e.message); });
+          invoices:invoices,appointments:appointments,counters:counters})).catch(function(e){ console.warn('Sync to Firebase failed:', e.message); });
       }
     }
     if (!_fbReady) {
@@ -1474,11 +1473,10 @@ async function _initFirebase() {
       if (_fac > 0 && _fac < agents.length) {
         // Firebase is behind — push our data up instead and skip overwrite
         if (_fbRef) {
-          var _pd = {settings:settings,properties:properties,agents:agents,
-            contractors:contractors,defects:defects,inspections:inspections,
-            invoices:invoices,appointments:appointments,counters:counters};
           _skipNextSync = true;
-          _fbRef.set(_pd).catch(function(){});
+          _fbRef.set(_stripPhotos({settings:settings,properties:properties,agents:agents,
+            contractors:contractors,defects:defects,inspections:inspections,
+            invoices:invoices,appointments:appointments,counters:counters})).catch(function(){});
         }
         return;
       }
