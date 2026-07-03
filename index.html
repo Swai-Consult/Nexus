@@ -1368,18 +1368,17 @@ async function _initFirebase() {
         ov.appendChild(btn);
       }
     }, 10000);
-    // ── STEP 1: Load from localStorage immediately so user never waits ──
+    // ── STEP 1: Load from IndexedDB immediately so user never waits ──
     var _hasLocal = false;
-    try {
-      var _preRaw = localStorage.getItem('pe_local_data');
-      if (_preRaw) {
-        var _preD = JSON.parse(_preRaw);
+    await new Promise(function(_idbResolve){
+      _idbLoad(function(_preD, _preT){
         if (_preD && (_preD.agents || _preD.properties || _preD.contractors)) {
           _applySnapshot(_preD);
           _hasLocal = true;
         }
-      }
-    } catch(_preE) {}
+        _idbResolve();
+      });
+    });
     // If we have local data, dismiss overlay NOW — Firebase loads in background
     if (_hasLocal) {
       _fbReady = true;
@@ -1410,21 +1409,20 @@ async function _initFirebase() {
       var _savedAdm = settings.adminUser ? JSON.parse(JSON.stringify(settings.adminUser)) : null;
       _applySnapshot(_fbVal);
       if (_savedAdm && _savedAdm.passwordHash) settings.adminUser = _savedAdm;
-      // Save to localStorage so next load is instant
-      try {
+      // Save Firebase data to IndexedDB so next load is instant
+      (function(){
         var _syncD = {settings:settings,properties:properties,agents:agents,
           contractors:contractors,defects:defects,inspections:inspections,
           invoices:invoices,appointments:appointments,counters:counters};
-        localStorage.setItem('pe_local_data', JSON.stringify(_syncD));
-        localStorage.setItem('pe_local_ts', new Date().toISOString());
-      } catch(e) {}
+        _idbSave(_syncD);
+      })();
     } else if (!_fbAgentCount && agents.length > 0) {
       // Firebase empty but local has data — push local to Firebase silently
       if (_fbRef) {
         var _pushD = {settings:settings,properties:properties,agents:agents,
           contractors:contractors,defects:defects,inspections:inspections,
           invoices:invoices,appointments:appointments,counters:counters};
-        _fbRef.set(_pushD).catch(function(){});
+        _fbRef.set(_pushD).catch(function(e){ console.warn('Auto-push to Firebase failed:', e.message); });
       }
     }
     if (!_fbReady) {
@@ -1482,6 +1480,40 @@ async function _initFirebase() {
   }
 }
 
+
+// ── IndexedDB local cache (no size limit — works with large photos) ──────────
+function _idbSave(data) {
+  try {
+    var req = indexedDB.open('pe_idb', 1);
+    req.onupgradeneeded = function(e){ e.target.result.createObjectStore('kv'); };
+    req.onsuccess = function(e){
+      try {
+        var tx = e.target.result.transaction('kv','readwrite');
+        tx.objectStore('kv').put(JSON.stringify(data), 'pe_data');
+        tx.objectStore('kv').put(new Date().toISOString(), 'pe_ts');
+      } catch(er){}
+    };
+  } catch(er){}
+}
+function _idbLoad(cb) {
+  try {
+    var req = indexedDB.open('pe_idb', 1);
+    req.onupgradeneeded = function(e){ e.target.result.createObjectStore('kv'); };
+    req.onsuccess = function(e){
+      try {
+        var tx = e.target.result.transaction('kv','readonly');
+        var gr = tx.objectStore('kv').get('pe_data');
+        var tr = tx.objectStore('kv').get('pe_ts');
+        var _d = null, _t = null;
+        gr.onsuccess = function(){ _d = gr.result; };
+        tr.onsuccess = function(){ _t = tr.result; };
+        tx.oncomplete = function(){ cb(_d ? JSON.parse(_d) : null, _t); };
+        tx.onerror   = function(){ cb(null, null); };
+      } catch(er){ cb(null, null); }
+    };
+    req.onerror = function(){ cb(null, null); };
+  } catch(er){ cb(null, null); }
+}
 async function saveAll() {
   if (!_fbRef) { showToast('⚠️ Firebase not connected yet.'); return; }
   _skipNextSync = true;
@@ -1490,11 +1522,8 @@ async function saveAll() {
     contractors: contractors, defects: defects, inspections: inspections,
     invoices: invoices, appointments: appointments, counters: counters
   };
-  // Mirror to localStorage immediately — survives Firebase hiccups
-  try {
-    localStorage.setItem('pe_local_data', JSON.stringify(_data));
-    localStorage.setItem('pe_local_ts', new Date().toISOString());
-  } catch(e) {}
+  // Save to IndexedDB immediately (no size limit — handles large photos)
+  _idbSave(_data);
   try {
     await _fbRef.set(_data);
     var ind = document.getElementById('tb-save-indicator');
