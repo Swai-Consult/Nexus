@@ -327,6 +327,7 @@ tr:hover td{background:#f8fafc;}
 .task-card-photos{margin:8px 0;}
 /* ===== PHOTO VIEWER MODAL ===== */
 .photo-viewer-img{max-width:100%;max-height:70vh;object-fit:contain;border-radius:8px;display:block;margin:0 auto;}
+@keyframes pe-spin { to { transform: rotate(360deg); } }
 </style>
   <!-- PWA -->
   <meta name="theme-color" content="#7c3aed">
@@ -338,6 +339,18 @@ tr:hover td{background:#f8fafc;}
   <link rel="apple-touch-icon" href="icons/apple-touch-icon.png">
 </head>
 <body>
+
+<!-- ============ LOADING OVERLAY ============ -->
+<div id="fb-loading-overlay" style="
+  position:fixed;inset:0;z-index:9999;
+  background:linear-gradient(135deg,#0f0a1e 0%,#1e1b4b 60%,#0f172a 100%);
+  display:flex;flex-direction:column;align-items:center;justify-content:center;
+  transition:opacity .4s ease;">
+  <div style="font-size:56px;margin-bottom:16px;">🏢</div>
+  <div style="font-size:22px;font-weight:800;color:#fff;letter-spacing:-.5px;margin-bottom:6px;" id="fb-load-name">ProEstate Manager</div>
+  <div style="font-size:13px;color:#94a3b8;margin-bottom:32px;" id="fb-load-status">Connecting to database…</div>
+  <div style="width:44px;height:44px;border:3px solid rgba(124,58,237,.25);border-top-color:#7c3aed;border-radius:50%;animation:pe-spin .75s linear infinite;"></div>
+</div>
 
 <!-- ============ ROLE SELECTOR ============ -->
 <div id="role-selector">
@@ -1335,6 +1348,11 @@ async function _initFirebase() {
     var snap = await _fbRef.get();
     _applySnapshot(snap.val());
     _fbReady = true;
+    // Dismiss loading overlay — data is ready, UI can be used
+    (function(){
+      var ov = document.getElementById('fb-loading-overlay');
+      if (ov) { ov.style.opacity = '0'; setTimeout(function(){ ov.style.display='none'; }, 400); }
+    })();
     // Refresh role-selector person lists in case user clicked before data arrived
     (function(){
       var agBox = document.getElementById('agent-select-box');
@@ -1369,6 +1387,14 @@ async function _initFirebase() {
   } catch(e) {
     console.error('Firebase init:', e);
     if (si) { si.style.color='#fca5a5'; si.textContent='🔴 Firebase error — ' + e.message; }
+    // Show error in loading overlay
+    (function(){
+      var st = document.getElementById('fb-load-status');
+      if (st) { st.style.color='#fca5a5'; st.textContent='🔴 Connection failed — check your internet and reload'; }
+      var ov = document.getElementById('fb-loading-overlay');
+      // Hide spinner, keep overlay with error message
+      if (ov) { var sp = ov.querySelector('div:last-child'); if(sp) sp.style.display='none'; }
+    })();
     return false;
   }
 }
