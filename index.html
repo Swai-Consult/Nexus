@@ -4337,7 +4337,12 @@ document.addEventListener('DOMContentLoaded', function() {
   // Upload invoice modal
   var uiInput = document.getElementById('ui-file-input');
   if (uiInput) uiInput.addEventListener('change', function(){ if(this.files[0]) _handleInvoiceFile(this.files[0]); this.value=''; });
-  wire('ui-cancel-btn', function(){ closeModal('upload-inv-modal'); });
+  wire('ui-cancel-btn',   function(){ closeModal('upload-inv-modal'); });
+  wire('ui-save-btn',     saveUploadedInvoice);
+  wire('tc-done-btn',     function(){ markTaskComplete(false); });
+  wire('tc-invoice-btn',  function(){ markTaskComplete(true); });
+  wire('dd-close-btn',    function(){ closeModal('defect-detail-modal'); });
+  wire('btn-new-invoice', function(){ openCreateInvoice(null); });
 
   /* Start on role selector — show immediately, load data async */
   document.getElementById('role-selector').style.display = 'flex';
